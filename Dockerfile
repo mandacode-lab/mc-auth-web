@@ -11,7 +11,7 @@ COPY i18n/ ./i18n/
 # For now, just copy as-is
 
 # Production stage with nginx
-FROM nginx:1.25-alpine
+FROM nginx:1.29-alpine
 
 # Copy custom nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
