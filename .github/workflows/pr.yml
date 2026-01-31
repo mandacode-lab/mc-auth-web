@@ -114,6 +114,11 @@ jobs:
           echo ""
           echo "✅ i18n key validation completed successfully"
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
       - name: Validate JavaScript
         run: |
           echo "Validating JavaScript syntax..."
