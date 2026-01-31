@@ -19,7 +19,6 @@ jobs:
         [
           {"dockerfile": "Dockerfile"}
         ]
-      base-path: "build"
       aws-region: ${{ vars.AWS_REGION }}
       ecr-registry: ${{ vars.REGISTRY }}
       ecr-repository-prefix: ${{ vars.REPOSITORY }}
