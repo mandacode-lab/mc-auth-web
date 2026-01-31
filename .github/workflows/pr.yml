@@ -1,0 +1,144 @@
+name: Pull Request
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate:
+    name: Validate Files
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate JSON
+        run: |
+          echo "Validating JSON files..."
+          for file in i18n/*.json; do
+            if python3 -m json.tool "$file" > /dev/null 2>&1; then
+              echo "✅ $file is valid JSON"
+            else
+              echo "❌ $file has invalid JSON syntax"
+              exit 1
+            fi
+          done
+
+      - name: Validate i18n Keys
+        run: |
+          echo "Validating i18n translation keys..."
+
+          # Find all i18n JSON files automatically
+          I18N_FILES=($(find i18n -name "*.json" -type f | sort))
+          BASE_FILE=""
+
+          # Determine base file (prefer en.json, otherwise first file)
+          for file in "${I18N_FILES[@]}"; do
+            if [[ "$file" == *"en.json" ]]; then
+              BASE_FILE="$file"
+              break
+            fi
+          done
+
+          # Fallback to first file if en.json not found
+          if [ -z "$BASE_FILE" ]; then
+            BASE_FILE="${I18N_FILES[0]}"
+          fi
+
+          echo "Base file: $BASE_FILE"
+          echo "Translation files: ${I18N_FILES[@]}"
+
+          # Get all keys from base file
+          BASE_KEYS=$(python3 -c "import json; print('\n'.join(json.load(open('$BASE_FILE')).keys()))")
+          BASE_LANG=$(basename "$BASE_FILE" .json)
+
+          # Check each translation file (except base)
+          for lang_file in "${I18N_FILES[@]}"; do
+            # Skip base file
+            if [ "$lang_file" == "$BASE_FILE" ]; then
+              continue
+            fi
+
+            lang=$(basename "$lang_file" .json)
+            echo ""
+            echo "Checking $lang against $BASE_LANG..."
+
+            # Get keys from current language file
+            LANG_KEYS=$(python3 -c "import json; print('\n'.join(json.load(open('$lang_file')).keys()))")
+
+            # Find missing keys
+            MISSING_KEYS=""
+            for key in $BASE_KEYS; do
+              if ! echo "$LANG_KEYS" | grep -q "^${key}$"; then
+                if [ -n "$MISSING_KEYS" ]; then
+                  MISSING_KEYS="$MISSING_KEYS, "
+                fi
+                MISSING_KEYS="${MISSING_KEYS}${key}"
+              fi
+            done
+
+            # Find extra keys (keys in language file but not in base)
+            EXTRA_KEYS=""
+            for key in $LANG_KEYS; do
+              if ! echo "$BASE_KEYS" | grep -q "^${key}$"; then
+                if [ -n "$EXTRA_KEYS" ]; then
+                  EXTRA_KEYS="$EXTRA_KEYS, "
+                fi
+                EXTRA_KEYS="${EXTRA_KEYS}${key}"
+              fi
+            done
+
+            # Report results
+            if [ -n "$MISSING_KEYS" ]; then
+              echo "❌ $lang: Missing keys: $MISSING_KEYS"
+              exit 1
+            fi
+
+            if [ -n "$EXTRA_KEYS" ]; then
+              echo "⚠️ $lang: Extra keys (not in $BASE_LANG): $EXTRA_KEYS"
+            fi
+
+            if [ -z "$MISSING_KEYS" ] && [ -z "$EXTRA_KEYS" ]; then
+              echo "✅ $lang: All keys match $BASE_LANG"
+            fi
+          done
+
+          echo ""
+          echo "✅ i18n key validation completed successfully"
+
+      - name: Validate JavaScript
+        run: |
+          echo "Validating JavaScript syntax..."
+          # Check if node is available
+          if ! command -v node &> /dev/null; then
+            echo "Installing Node.js..."
+            curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
+            apt-get install -y nodejs
+          fi
+
+          # Validate JavaScript syntax
+          if node --check **/*.js; then
+            echo "✅ JavaScript syntax is valid"
+          else
+            echo "❌ JavaScript syntax error detected"
+            exit 1
+          fi
+
+  docker-test:
+    name: Docker Test
+    uses: mandacode-lab/workflows/.github/workflows/docker-test.yml@v0.2.1
+    with:
+      images: |
+        [
+          {"dockerfile": "Dockerfile"}
+        ]
+      enable-hadolint: true
+      enable-trivy: true
+      trivy-severity: "HIGH,CRITICAL"
