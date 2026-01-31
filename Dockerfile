@@ -19,13 +19,12 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Copy static files
 COPY --from=builder /app /usr/share/nginx/html
 
-# Add non-root user
-RUN addgroup -g 1001 -S nginx && \
-    adduser -S -D -H -u 1001 -h /usr/share/nginx/html -s /sbin/nologin -G nginx -g nginx nginx
-
-# Set permissions
+# Set permissions for existing nginx user
 RUN chown -R nginx:nginx /usr/share/nginx/html && \
     chmod -R 755 /usr/share/nginx/html
+
+# Switch to non-root user
+USER nginx
 
 # Expose port
 EXPOSE 8080
